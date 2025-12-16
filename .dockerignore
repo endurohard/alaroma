@@ -1,0 +1,74 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Documentation
+*.md
+docs/
+ARCHITECTURE.md
+README.md
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Node modules
+node_modules
+*/node_modules
+
+# Build outputs
+dist
+build
+.next
+out
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage
+.nyc_output
+test
+tests
+*.test.js
+*.spec.js
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Database
+*.sql
+*.sqlite
+
+# Backups
+backups
+
+# Temporary
+tmp
+temp
+*.tmp
+
+# Scripts
+scripts/
+Makefile

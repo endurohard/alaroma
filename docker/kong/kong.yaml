@@ -1,0 +1,377 @@
+_format_version: "3.0"
+_transform: true
+
+# ============================================
+# SERVICES & ROUTES
+# ============================================
+
+services:
+  # Backend API Service
+  - name: backend-api
+    url: http://backend:3000
+    tags:
+      - backend
+      - api
+    routes:
+      - name: api-routes
+        paths:
+          - /api
+        strip_path: false
+        methods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        protocols:
+          - http
+          - https
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          hour: 1000
+          policy: local
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Authorization
+            - Content-Type
+            - X-Requested-With
+          exposed_headers:
+            - X-Auth-Token
+          credentials: true
+          max_age: 3600
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - X-Kong-Request-ID:$(uuid)
+
+  # Frontend Service
+  - name: frontend-app
+    url: http://frontend:3001
+    tags:
+      - frontend
+    routes:
+      - name: frontend-routes
+        paths:
+          - /
+        strip_path: false
+        protocols:
+          - http
+          - https
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 300
+          hour: 5000
+          policy: local
+
+  # Health Check Endpoint
+  - name: backend-health
+    url: http://backend:3000/health
+    tags:
+      - health
+    routes:
+      - name: health-route
+        paths:
+          - /health
+        strip_path: true
+        protocols:
+          - http
+          - https
+
+  # Auth Service (login, register, etc.)
+  - name: auth-service
+    url: http://backend:3000
+    tags:
+      - auth
+    routes:
+      - name: auth-routes
+        paths:
+          - /api/auth
+        strip_path: false
+        methods:
+          - POST
+          - GET
+        protocols:
+          - http
+          - https
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 20
+          hour: 100
+          policy: local
+      - name: cors
+        config:
+          origins:
+            - "*"
+          credentials: true
+
+  # Products API
+  - name: products-service
+    url: http://backend:3000
+    tags:
+      - products
+    routes:
+      - name: products-routes
+        paths:
+          - /api/products
+        strip_path: false
+        protocols:
+          - http
+          - https
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 200
+          hour: 2000
+
+  # Sales API
+  - name: sales-service
+    url: http://backend:3000
+    tags:
+      - sales
+    routes:
+      - name: sales-routes
+        paths:
+          - /api/sales
+        strip_path: false
+        protocols:
+          - http
+          - https
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          hour: 1000
+
+  # Inventory API
+  - name: inventory-service
+    url: http://backend:3000
+    tags:
+      - inventory
+    routes:
+      - name: inventory-routes
+        paths:
+          - /api/inventory
+        strip_path: false
+        protocols:
+          - http
+          - https
+
+  # Reports API (с более строгими ограничениями)
+  - name: reports-service
+    url: http://backend:3000
+    tags:
+      - reports
+    routes:
+      - name: reports-routes
+        paths:
+          - /api/reports
+        strip_path: false
+        protocols:
+          - http
+          - https
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 30
+          hour: 200
+
+# ============================================
+# UPSTREAM CONFIGURATIONS
+# ============================================
+
+upstreams:
+  - name: backend-upstream
+    algorithm: round-robin
+    slots: 10000
+    healthchecks:
+      active:
+        type: http
+        http_path: /health
+        timeout: 10
+        concurrency: 10
+        healthy:
+          interval: 30
+          successes: 2
+        unhealthy:
+          interval: 30
+          http_failures: 3
+          timeouts: 3
+    targets:
+      - target: backend:3000
+        weight: 100
+
+# ============================================
+# GLOBAL PLUGINS
+# ============================================
+
+plugins:
+  # Request ID для трейсинга
+  - name: correlation-id
+    config:
+      header_name: X-Request-ID
+      generator: uuid
+      echo_downstream: true
+
+  # IP Restriction (раскомментировать при необходимости)
+  # - name: ip-restriction
+  #   config:
+  #     allow:
+  #       - 127.0.0.1
+  #       - 10.0.0.0/8
+  #       - 172.16.0.0/12
+  #       - 192.168.0.0/16
+
+  # Response Transformer для добавления security headers
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - X-Frame-Options:SAMEORIGIN
+          - X-Content-Type-Options:nosniff
+          - X-XSS-Protection:1; mode=block
+          - Referrer-Policy:no-referrer-when-downgrade
+
+  # File Log для Loki (если нужно)
+  # - name: file-log
+  #   config:
+  #     path: /tmp/kong.log
+  #     reopen: true
+
+# ============================================
+# CONSUMERS (ПОЛЬЗОВАТЕЛИ API)
+# ============================================
+
+consumers:
+  # Admin Consumer
+  - username: admin-service
+    tags:
+      - admin
+    custom_id: admin-001
+    # JWT credentials будут добавлены позже через Admin API
+
+  # Frontend Consumer
+  - username: frontend-service
+    tags:
+      - frontend
+    custom_id: frontend-001
+
+  # Mobile App Consumer (для будущего использования)
+  - username: mobile-app
+    tags:
+      - mobile
+    custom_id: mobile-001
+
+# ============================================
+# JWT CONFIGURATION (для аутентификации)
+# ============================================
+
+# Чтобы включить JWT аутентификацию, раскомментируйте:
+#
+# jwt_secrets:
+#   - consumer: admin-service
+#     key: admin-jwt-key
+#     secret: your-super-secret-key-change-in-production
+#     algorithm: HS256
+#
+# Затем добавьте JWT plugin к нужным routes:
+# plugins:
+#   - name: jwt
+#     route: api-routes
+#     config:
+#       uri_param_names:
+#         - jwt
+#       cookie_names:
+#         - jwt
+#       claims_to_verify:
+#         - exp
+
+# ============================================
+# RATE LIMITING TIERS
+# ============================================
+
+# Можно создать разные тарифы rate limiting для разных consumers:
+#
+# plugins:
+#   - name: rate-limiting
+#     consumer: admin-service
+#     config:
+#       minute: 1000
+#       hour: 10000
+#       policy: local
+#
+#   - name: rate-limiting
+#     consumer: mobile-app
+#     config:
+#       minute: 60
+#       hour: 1000
+#       policy: local
+
+# ============================================
+# ACL (ACCESS CONTROL LISTS)
+# ============================================
+
+# Для управления доступом к разным API endpoints:
+#
+# acls:
+#   - consumer: admin-service
+#     group: admins
+#
+#   - consumer: frontend-service
+#     group: web-apps
+#
+# plugins:
+#   - name: acl
+#     route: admin-api-routes
+#     config:
+#       allow:
+#         - admins
+
+# ============================================
+# PROMETHEUS METRICS (опционально)
+# ============================================
+
+# Для мониторинга Kong через Prometheus:
+# plugins:
+#   - name: prometheus
+#     config:
+#       per_consumer: true
+
+# ============================================
+# NOTES
+# ============================================
+
+# 1. Чтобы добавить JWT аутентификацию:
+#    - Раскомментируйте секцию JWT CONFIGURATION
+#    - Добавьте JWT plugin к защищенным routes
+#    - Генерируйте JWT токены в backend
+#
+# 2. Для production:
+#    - Измените secrets в JWT
+#    - Настройте IP restrictions
+#    - Включите логирование в Loki
+#    - Настройте SSL сертификаты
+#
+# 3. Kong Admin API доступен на порту 8001:
+#    curl http://localhost:8001/services
+#    curl http://localhost:8001/routes
+#    curl http://localhost:8001/plugins
+#
+# 4. Проверка конфигурации:
+#    docker exec alaroma-kong kong config parse /kong/declarative/kong.yaml

@@ -54,6 +54,10 @@ export const useAuthStore = create<AuthState>()(
           console.log('Устанавливаем новый state:', newState);
           console.log('newState.user:', newState.user);
 
+          // Сохраняем токены также в localStorage для axios interceptor
+          localStorage.setItem('accessToken', response.access_token);
+          localStorage.setItem('refreshToken', response.refresh_token);
+
           set(newState);
 
           // Проверяем что сохранилось
@@ -81,6 +85,10 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error('Logout error:', error);
         } finally {
+          // Очищаем токены из localStorage
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+
           // Очищаем всё независимо от результата
           set({
             user: null,
@@ -140,6 +148,15 @@ export const useAuthStore = create<AuthState>()(
       }),
       onRehydrateStorage: () => (state) => {
         console.log('Гидрация завершена, state=', state);
+
+        // Восстанавливаем токены в localStorage для axios interceptor
+        if (state?.accessToken) {
+          localStorage.setItem('accessToken', state.accessToken);
+        }
+        if (state?.refreshToken) {
+          localStorage.setItem('refreshToken', state.refreshToken);
+        }
+
         state?.setHasHydrated(true);
       },
     }
